@@ -16,7 +16,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
@@ -73,14 +72,12 @@ import org.jsoup.select.Elements;
 import java.io.File;
 import java.io.IOException;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 
 
@@ -107,6 +104,7 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
     private String mCameraPhotoPath;
 
     private static CountDownTimer testTimer;
+
 
 //    private ActivityMainBinding mBinding;
 
@@ -162,7 +160,6 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         {
             testTimer.cancel();
         }
-        
         super.onDestroy();
     }
     
@@ -324,7 +321,7 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
 
         mywebView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
 //            tryDownload(url, userAgent, contentDisposition, mimetype, contentLength);
-            handleDownload(url, userAgent, mimetype, contentDisposition);
+           handleDownload(url, userAgent, mimetype, contentDisposition);
 
 
         });
@@ -614,33 +611,70 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         mFilePathCallback = null;
     }
     private void downloadFile(String fileName, String url, String userAgent) {
+        String mimeType = getMimeType(fileName);
+        logger.log("mimatype = " + mimeType);
+
+        new BackgroundTask(){
+            @Override
+            public void doInBackground(){
+                HttpURLConnection connection = null;
+                try {
+                    connection = (HttpURLConnection) new URL(url).openConnection();
+
+
+                    // Just read the response code to open the firewall channel [3]
+                    //int responseCode = connection.getResponseCode();
+                    String filename = connection.getHeaderField("Content-Disposition");
+                    Log.d(TAG, "Warm-up handshake filename = " + filename);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Warm-up socket generation failed", e);
+                    } finally {
+                        if (connection != null) {
+                            connection.disconnect();
+                        }
+                    }
+
+                }
+        }.execute(() -> {runOnUiThread(() -> {
+                enqueueToSystemManager(fileName, url, userAgent, mywebView.getUrl(), mimeType);
+            });
+        });
+    }
+
+    private void enqueueToSystemManager(String fileName, String downloadURL, String userAgent, String refererUrl, String mimeType) {
         try {
-            logger.log("mimatype = " +getMimeType(fileName));
-            String mimeType = getMimeType(fileName);
-            DownloadManager downloadManager = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            String cookie = CookieManager.getInstance().getCookie(url);
+            DownloadManager downloadManager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(downloadURL));
+            String cookie = CookieManager.getInstance().getCookie(downloadURL);
+
             request.allowScanningByMediaScanner();
             request.setTitle(fileName)
-                    .setDescription("Downloading")
-                    .addRequestHeader("cookie", cookie)
-                    .addRequestHeader("User-Agent", userAgent)
+                    .setDescription("Downloading file")
                     .setMimeType(mimeType)
                     .setAllowedOverMetered(true)
                     .setAllowedOverRoaming(true)
                     .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE | DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                     .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
 
+            // Re-inject identical validation headers into the warm socket stream [3]
+            if (cookie != null) {
+                request.addRequestHeader("cookie", cookie);
+            }
+
             downloadManager.enqueue(request);
-            sURL = "";
-            sFileName = "";
-            sUserAgent = "";
-            Toast.makeText(this, "Download Started", Toast.LENGTH_SHORT).show();
-        } catch (Exception error) {
-            Toast.makeText(this, "error" + error, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Download Started Successfully.", Toast.LENGTH_LONG).show();
 
 
+        } catch (Exception e) {
+            Log.e(TAG, "DownloadManager routing failed", e);
+            Toast.makeText(this, "System manager queue failed.", Toast.LENGTH_SHORT).show();
         }
+
+        // Clear temporary variable properties
+        sURL = "";
+        sFileName = "";
+        sUserAgent = "";
+
     }
 
     public String getFileType(String url) {
@@ -676,8 +710,6 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
             super.onBackPressed();
         }
     }
-
-
 
     @Override
     public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
@@ -973,7 +1005,6 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
             iveltWebInterface.saveCredentials("","");
         }
         if (isIvelt(url)){
-//                return  false;
             return handleIvelt(url, view);
         }
 
@@ -981,7 +1012,6 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         Intent i = new Intent(Intent.ACTION_VIEW);
         i.setData(request);
         try {
-//            return !isAllowedWebsite(url);
             startActivity(i);
         }catch (ActivityNotFoundException activityNotFoundException){
             logger.log("No browser found, trying to open URL = " + request);
@@ -1075,8 +1105,6 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
                         }
                     }
                     swiping = false;
-//                    Log.d("ONTOUCH", "action: " + action + " count: " + event.getPointerCount() + " start x: " + startX + " end x: "
-//                            + endX + " is horizontal " + isHorizontalSwipe + " is forward " + isForward);
                     break;
                 case MotionEvent.ACTION_MOVE:
                     break;
