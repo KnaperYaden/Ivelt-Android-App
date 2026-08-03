@@ -261,10 +261,13 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         mywebView.getSettings().setDomStorageEnabled(true);
         mywebView.getSettings().setDatabaseEnabled(true);
         mywebView.setLayerType(View.LAYER_TYPE_NONE, null);
-        BackForwardCacheSettings settings =
-                WebSettingsCompat.getBackForwardCacheSettings(mywebView.getSettings());
-        //settings.setTimeoutSeconds(600);
-        settings.setMaxPagesInCache(0);
+
+
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.BACK_FORWARD_CACHE_SETTINGS_EXPERIMENTAL_V3)) {
+            BackForwardCacheSettings settings =
+                    WebSettingsCompat.getBackForwardCacheSettings(mywebView.getSettings());
+            settings.setMaxPagesInCache(0);
+        }
 
 
 
