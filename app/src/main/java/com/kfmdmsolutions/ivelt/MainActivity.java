@@ -56,7 +56,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.preference.PreferenceManager;
+import androidx.webkit.BackForwardCacheSettings;
+import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewAssetLoader;
+import androidx.webkit.WebViewFeature;
 
 import com.google.firebase.crashlytics.FirebaseCrashlytics;
 import com.kfmdmsolutions.github.swipyrefreshlayout.library.SwipyRefreshLayout;
@@ -185,7 +188,7 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         }
         logger.log("URL Intent Url is " + url);
     }
-    @SuppressLint({"ClickableViewAccessibility", "SetJavaScriptEnabled"})
+    @SuppressLint({"ClickableViewAccessibility", "RequiresFeature","SetJavaScriptEnabled"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -256,6 +259,15 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         mywebView.getSettings().setMixedContentMode(MIXED_CONTENT_COMPATIBILITY_MODE);
         mywebView.getSettings().setAllowFileAccess(true);
         mywebView.getSettings().setDomStorageEnabled(true);
+        mywebView.getSettings().setDatabaseEnabled(true);
+        mywebView.setLayerType(View.LAYER_TYPE_NONE, null);
+        BackForwardCacheSettings settings =
+                WebSettingsCompat.getBackForwardCacheSettings(mywebView.getSettings());
+        //settings.setTimeoutSeconds(600);
+        settings.setMaxPagesInCache(0);
+
+
+
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(mywebView,true);
 //        String desktopuseragent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36";
@@ -873,7 +885,6 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         public void onPageStarted(WebView view, String url, Bitmap favicon) {
             super.onPageStarted(view, url, favicon);
             this.showProgress();
-
         }
 
         @Nullable
@@ -920,7 +931,7 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
 
         @Override
         public void onPageFinished(WebView view, String url) {
-            mSwipyRefreshLayout.setRefreshing(false);
+            this.hideProgress();
             FirebaseCrashlytics.getInstance().log("current url " + currentUrl);
             if (url == null){
                 FirebaseCrashlytics.getInstance().recordException(new Exception("Null URL"));
@@ -930,7 +941,7 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
                 currentUrl = url;
             }
             super.onPageFinished(view, url);
-            this.hideProgress();
+
             DisplayMetrics metrics = getDisplayMetrics();
 
             metrics.widthPixels /= metrics.density;
@@ -941,8 +952,8 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
                 mywebView.setVisibility(View.VISIBLE);
             }
             try {
-
-                mywebView.loadUrl("javascript:" + Utils.readTextFile(MainActivity.this, R.raw.add_style));
+                String loadJavascript = Utils.readTextFile(MainActivity.this, R.raw.add_style);
+                mywebView.loadUrl("javascript:" + loadJavascript);
                 if (shouldLogout){
                     shouldLogout = false;
                     mywebView.loadUrl("javascript:" +
@@ -971,7 +982,30 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
             }
 
         }
+        @Override
+        public void doUpdateVisitedHistory(WebView view, String url, boolean isReload) {
+            super.doUpdateVisitedHistory(view, url, isReload);
 
+            logger.log("doUpdateVisitedHistory: " + url);
+
+            if (url != null && !url.equals("about:blank")) {
+                currentUrl = url;
+            }
+
+            hideProgress();
+        }
+
+        @Override
+        public void onPageCommitVisible(WebView view, String url) {
+            super.onPageCommitVisible(view, url);
+
+            logger.log("onPageCommitVisible: " + url);
+            hideProgress();
+
+            if (!shouldLogout) {
+                view.setVisibility(View.VISIBLE);
+            }
+        }
         @Override
         public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
 //            FirebaseCrashlytics.getInstance().recordException(new Exception("Received error " + error.getErrorCode() + ": "+ error.getDescription() + " while loading URL " + request.getUrl()));
