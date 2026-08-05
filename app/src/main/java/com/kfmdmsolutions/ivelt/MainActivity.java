@@ -48,7 +48,9 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.Toast;
+import android.window.OnBackInvokedDispatcher;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -235,6 +237,19 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         mywebView = findViewById(R.id.webview);
         mSwipyRefreshLayout = (SwipyRefreshLayout) findViewById(R.id.swipeContainer);
 
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    this::handleBackNavigation);
+        } else {
+            getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+                @Override
+                public void handleOnBackPressed() {
+                    handleBackNavigation();
+                }
+            });
+        }
 //        SwipyRefreshLayoutDirection = findViewById(R.id.swipeContainer);
 //        SwipyRefreshLayoutDirection.setNestedScrollingEnabled(true);
         WebViewAssetLoader.AssetsPathHandler assetsHandler = new WebViewAssetLoader.AssetsPathHandler(this);
@@ -346,6 +361,13 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
 
     }
 
+    private void handleBackNavigation() {
+        if (mywebView.canGoBack()) {
+            mywebView.goBack();
+        } else {
+            finish();
+        }
+    }
 
     private void handleDownload(String url, String userAgent, String mimeType, String contentDisposition) {
 
