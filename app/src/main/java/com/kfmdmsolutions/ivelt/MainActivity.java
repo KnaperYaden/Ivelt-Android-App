@@ -57,6 +57,11 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import androidx.preference.PreferenceManager;
 import androidx.webkit.BackForwardCacheSettings;
 import androidx.webkit.WebSettingsCompat;
@@ -237,6 +242,18 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
         mywebView = findViewById(R.id.webview);
         mSwipyRefreshLayout = (SwipyRefreshLayout) findViewById(R.id.swipeContainer);
 
+        mSwipyRefreshLayout.setBackgroundColor(
+                ContextCompat.getColor(this, R.color.purple_700));
+        ViewCompat.setOnApplyWindowInsetsListener(mSwipyRefreshLayout, (view, windowInsets) -> {
+            Insets systemBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            view.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
+            return windowInsets;
+        });
+        ViewCompat.requestApplyInsets(mSwipyRefreshLayout);
+        WindowInsetsControllerCompat insetsController =
+                new WindowInsetsControllerCompat(getWindow(), getWindow().getDecorView());
+        insetsController.setAppearanceLightStatusBars(false);
+        insetsController.setAppearanceLightNavigationBars(false);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
