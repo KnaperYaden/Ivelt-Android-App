@@ -75,6 +75,7 @@ import com.kfmdmsolutions.ivelt.Utilities.Logger;
 import com.kfmdmsolutions.ivelt.Utilities.Utils;
 import com.kfmdmsolutions.ivelt.Utilities.WebkitCookieManagerProxy;
 
+import org.json.JSONObject;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -1058,6 +1059,24 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
 
         @Override
         public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse errorResponse) {
+            if (errorResponse.getStatusCode() == 403 && isCloudflareChallenge(errorResponse)) {
+                // A page resource (image, avatar, ...) was blocked by Cloudflare. Re-request it from
+                // the page so cf_hook.js gets the challenge page and shows the pop-up; once solved,
+                // onCloudflareSolved() reloads the broken images.
+                logger.log("Cloudflare blocked resource: " + request.getUrl());
+                long now = System.currentTimeMillis();
+                if (!request.isForMainFrame() && now - lastCfProbe > 10_000
+                        && (cfDialog == null || !cfDialog.isShowing())) {
+                    // cf_hook.js may not be injected yet (that happens in onPageFinished); in that case
+                    // it scans for broken images itself once it loads.
+                    view.evaluateJavascript("window.__cfProbe ? (window.__cfProbe("
+                            + JSONObject.quote(request.getUrl().toString()) + "), true) : false", value -> {
+                        if ("true".equals(value)) lastCfProbe = System.currentTimeMillis();
+                    });
+                }
+                super.onReceivedHttpError(view, request, errorResponse);
+                return;
+            }
             if (errorResponse.getStatusCode() == 404){
                 Toast.makeText(MainActivity.this, request.getUrl().toString() + " not found", Toast.LENGTH_LONG).show();
             }else {
@@ -1333,6 +1352,17 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
                 .create();
         cfDialog.setOnDismissListener(d -> cf.destroy());
         cfDialog.show();
+    }
+
+    private long lastCfProbe = 0;
+
+    private static boolean isCloudflareChallenge(WebResourceResponse response) {
+        Map<String, String> headers = response.getResponseHeaders();
+        if (headers == null) return false;
+        for (Map.Entry<String, String> e : headers.entrySet()) {
+            if ("cf-mitigated".equalsIgnoreCase(e.getKey()) && "challenge".equalsIgnoreCase(e.getValue())) return true;
+        }
+        return false;
     }
 
     private static String extractCookie(String all, String name) {
