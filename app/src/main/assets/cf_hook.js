@@ -71,6 +71,35 @@
     });
   };
 
+  // Download a file through the WebView itself (same cookies / user agent / Cloudflare clearance
+  // as the page) and hand it to the app to save. The system DownloadManager can't pass Cloudflare.
+  window.__appDownload = async (url, fallbackName) => {
+    try {
+      const r = await f(url, {credentials: 'include'});
+      if (isChallenge(r.status, h => r.headers.get(h))) {
+        window.__cfRetry = () => window.__appDownload(url, fallbackName);
+        r.clone().text().then(t => report(r.url, t));
+        return;
+      }
+      if (!r.ok) { android.downloadFailed(url, r.status); return; }
+      const cd = r.headers.get('content-disposition') || '';
+      let m = cd.match(/filename\*=(?:UTF-8'')?([^;]+)/i) || cd.match(/filename="?([^";]+)"?/i);
+      let name = fallbackName;
+      if (m) { try { name = decodeURIComponent(m[1].trim()); } catch (e) { name = m[1].trim(); } }
+      const blob = await r.blob();
+      const b64 = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(String(fr.result).split(',')[1] || '');
+        fr.onerror = rej;
+        fr.readAsDataURL(blob);
+      });
+      android.saveDownload(name, blob.type || 'application/octet-stream', b64);
+    } catch (e) {
+      console.error('appDownload failed', e);
+      android.downloadFailed(url, -1);
+    }
+  };
+
   // Called by the app once the check passes
   window.onCloudflareSolved = () => {
     if (typeof window.__cfRetry === 'function') { const fn = window.__cfRetry; window.__cfRetry = null; fn(); }
