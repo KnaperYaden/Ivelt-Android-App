@@ -66,6 +66,20 @@ public class IveltWebInterface {
         }
     }
     @JavascriptInterface
+    public void saveDownload(String fileName, String mimeType, String base64){
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).saveDownload(fileName, mimeType, base64);
+        }
+    }
+    @JavascriptInterface
+    public void downloadFailed(String url, int status){
+        Logger.getInstance(context).log("Download failed (" + status + "): " + url);
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).runOnUiThread(() ->
+                    Toast.makeText(context, "Download failed (" + status + ")", Toast.LENGTH_LONG).show());
+        }
+    }
+    @JavascriptInterface
     public void saveDefaultPage(String defaultPage){
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
         preferences.edit().putString("default_page", defaultPage).apply();
