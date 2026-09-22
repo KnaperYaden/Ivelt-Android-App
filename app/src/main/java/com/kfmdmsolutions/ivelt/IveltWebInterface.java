@@ -59,6 +59,13 @@ public class IveltWebInterface {
         Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show();
     }
     @JavascriptInterface
+    public void solveCloudflare(String url, String html){
+        if (context instanceof MainActivity) {
+            MainActivity activity = (MainActivity) context;
+            activity.runOnUiThread(() -> activity.showCloudflareDialog(url, html));
+        }
+    }
+    @JavascriptInterface
     public void saveDefaultPage(String defaultPage){
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
         preferences.edit().putString("default_page", defaultPage).apply();

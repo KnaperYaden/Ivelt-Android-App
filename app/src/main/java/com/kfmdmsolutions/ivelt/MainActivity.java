@@ -88,7 +88,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 public class MainActivity extends AppCompatActivity implements SwipyRefreshLayout.OnRefreshListener {
@@ -1272,6 +1274,75 @@ public class MainActivity extends AppCompatActivity implements SwipyRefreshLayou
     }
 
 
+
+    // ---- Cloudflare challenge pop-up -------------------------------------------------------
+    // Called from cf_hook.js (via IveltWebInterface.solveCloudflare) when a background request
+    // gets a 403 with "cf-mitigated: challenge". Shows the check in a dialog so the current page
+    // (e.g. a half-written reply) is not lost. WebViews share one CookieManager, so the
+    // cf_clearance cookie issued here also applies to the main WebView.
+    private AlertDialog cfDialog;
+
+    void showCloudflareDialog(String url, String html) {
+        if (cfDialog != null && cfDialog.isShowing()) return;   // one at a time
+        logger.log("Cloudflare challenge for " + url);
+
+        final CookieManager cm = CookieManager.getInstance();
+        final String before = extractCookie(cm.getCookie("https://www.ivelt.com"), "cf_clearance");
+
+        final WebView cf = new WebView(this);
+        cf.setMinimumHeight((int) (getResources().getDisplayMetrics().heightPixels * 0.6)); // don't collapse inside the dialog
+        WebSettings s = cf.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setUserAgentString(mywebView.getSettings().getUserAgentString()); // clearance is tied to the UA
+        cm.setAcceptThirdPartyCookies(cf, true);
+
+        cf.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView v, String u) {
+                String now = extractCookie(cm.getCookie("https://www.ivelt.com"), "cf_clearance");
+                logger.log("CF dialog page finished: " + u + " clearance=" + (now != null));
+                if (now != null && !now.equals(before)) {           // a new clearance was issued
+                    cm.flush();
+                    if (cfDialog != null) cfDialog.dismiss();
+                    mywebView.evaluateJavascript("window.onCloudflareSolved && window.onCloudflareSolved()", null);
+                    Toast.makeText(MainActivity.this, "Verified", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                String h = r.getUrl().getHost();                     // keep the pop-up on ivelt / Cloudflare only
+                return h == null || !(h.endsWith("ivelt.com") || h.endsWith("cloudflare.com"));
+            }
+        });
+
+        if (html != null && html.contains("_cf_chl_opt")) {
+            // Show the exact challenge page Cloudflare returned to the background request
+            cf.loadDataWithBaseURL(url, html, "text/html", "UTF-8", url);
+        } else {
+            // Fallback: load the page with the header background requests send
+            Map<String, String> h = new HashMap<>();
+            h.put("X-Requested-With", "XMLHttpRequest");
+            cf.loadUrl(url, h);
+        }
+
+        cfDialog = new AlertDialog.Builder(this)
+                .setView(cf)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
+        cfDialog.setOnDismissListener(d -> cf.destroy());
+        cfDialog.show();
+    }
+
+    private static String extractCookie(String all, String name) {
+        if (all == null) return null;
+        for (String p : all.split(";")) {
+            p = p.trim();
+            if (p.startsWith(name + "=")) return p.substring(name.length() + 1);
+        }
+        return null;
+    }
 
     public abstract class BackgroundTask {
         private void startBackground(Runnable onPostExecute) {
